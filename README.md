@@ -1,1 +1,1 @@
-# badminton_analysis
+# badminton_analytics

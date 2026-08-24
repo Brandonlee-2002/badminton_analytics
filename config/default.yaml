@@ -1,0 +1,9 @@
+model: yolo26s.pt
+tracker: bytetrack.yaml
+confidence: 0.25
+image_size: 960
+classes: [0]
+max_track_history: 45
+court_homography: null
+output_video: data/processed/annotated.mp4
+output_metrics: data/processed/metrics.json

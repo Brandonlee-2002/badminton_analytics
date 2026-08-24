@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.DS_Store
+
+# Local media and model artifacts
+data/raw/*
+data/frames/*
+data/processed/*
+models/*.pt
+models/*.onnx
+runs/

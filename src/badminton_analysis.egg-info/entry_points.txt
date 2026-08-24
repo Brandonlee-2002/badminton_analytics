@@ -1,0 +1,2 @@
+[console_scripts]
+badminton-analyze = badminton_analysis.cli:main

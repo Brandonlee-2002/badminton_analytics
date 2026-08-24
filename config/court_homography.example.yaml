@@ -1,0 +1,5 @@
+# Replace these values with a matrix calculated from your camera view.
+homography:
+  - [1.0, 0.0, 0.0]
+  - [0.0, 1.0, 0.0]
+  - [0.0, 0.0, 1.0]

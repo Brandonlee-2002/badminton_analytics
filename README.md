@@ -23,7 +23,7 @@ python -m pip install --upgrade pip
 python -m pip install -e . pytest
 ```
 
-The first YOLO26 run downloads the selected model weights. On Apple Silicon, Ultralytics can use MPS for training; video inference can start on the default device and be configured later if needed. Video analysis displays a live frame progress bar and prints `Analysis complete.` when the output files are ready.
+The first YOLO26 run downloads the selected model weights. On Apple Silicon, Ultralytics can use MPS for training; video inference can start on the default device and be configured later if needed. Video analysis displays a live frame progress bar using only the Python standard library and prints `Analysis complete.` when the output files are ready.
 
 ## Analyze A Video
 

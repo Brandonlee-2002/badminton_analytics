@@ -33,6 +33,7 @@ def main() -> None:
         confidence=config["confidence"],
         image_size=config["image_size"],
         classes=config.get("classes"),
+        court_polygon=config.get("court_polygon"),
         max_track_history=config["max_track_history"],
         homography=homography,
     )

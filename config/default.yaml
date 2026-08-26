@@ -3,6 +3,12 @@ tracker: bytetrack.yaml
 confidence: 0.25
 image_size: 960
 classes: [0]
+
+court_polygon:
+  - [40, 268] # near left
+  - [333, 359] # near right
+  - [516, 190] # far right
+  - [296, 190] # far left
 max_track_history: 45
 court_homography: null
 output_video: data/processed/annotated.mp4

@@ -12,3 +12,4 @@ data/processed/*
 models/*.pt
 models/*.onnx
 runs/
+datasets/

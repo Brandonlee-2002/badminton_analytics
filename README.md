@@ -67,6 +67,69 @@ court_homography: config/court_homography.yaml
 
 The homography should map image pixels to court coordinates in metres. For a full singles court, a practical coordinate system is approximately 6.10 m wide by 13.40 m long. Use the actual court geometry and the camera view when calculating the matrix; the identity matrix in the example is only a schema example.
 
+## Broadcast Camera And Replay Handling
+
+`scene_filter` in `config/default.yaml` detects hard cuts and checks how much of
+the calibrated polygon matches the expected court colour. Close-ups, wide
+shots, and courtside views remain in the annotated video with a `SKIPPED` label
+but are not sent through player or equipment detection. Trackers reset at cuts.
+
+The defaults are tuned for the green 640x360 court in `data/raw/match.mp4`.
+Use `manual_skip_ranges` for replays that show the same gameplay camera:
+
+```yaml
+scene_filter:
+  manual_skip_ranges:
+    - [125.5, 132.0]
+    - [418.0, 426.5]
+```
+
+Ranges use `[start_seconds, end_seconds]`. Semantic replay detection still
+requires labeled replay scenes or reliable broadcast replay-logo cues.
+
+## Racket And Shuttle Models
+
+Racket and shuttle detection are kept separate from player tracking. Both are
+disabled by default because this repository does not include custom weights.
+
+To train a racket detector, label YOLO-format boxes, update
+`config/racket_dataset.example.yaml`, and run:
+
+```bash
+yolo train \
+  model=yolo26s.pt \
+  data=config/racket_dataset.example.yaml \
+  imgsz=1280 \
+  epochs=100
+```
+
+Copy the selected weights to `models/racket_best.pt`, then enable:
+
+```yaml
+racket_detector:
+  enabled: true
+  model: models/racket_best.pt
+```
+
+For a rough baseline only, use `yolo26s.pt` with `classes: [38]`, COCO's
+`tennis racket` class. A custom badminton-racket model is more reliable.
+
+The shuttle is not a COCO class. Label it across consecutive frames, train
+with `config/shuttle_dataset.example.yaml`, save the weights as
+`models/shuttle_best.pt`, and enable `shuttle_detector`. The pipeline applies
+alpha-beta temporal smoothing, bridges short missed detections, and resets at
+camera cuts. A TrackNet-style heatmap model remains preferable for a tiny,
+blurred shuttle and can later replace this detector behind the same event log.
+
+The analysis now writes:
+
+- `data/processed/annotated.mp4`: player/equipment overlays and skipped scenes
+- `data/processed/metrics.json`: player and processing summaries
+- `data/processed/events.json`: scene segments, rackets, and shuttle positions
+
+Keep dataset splits separated by complete source videos. Do not put adjacent
+frames from one rally into different train/validation/test splits.
+
 ## Project Layout
 
 ```text

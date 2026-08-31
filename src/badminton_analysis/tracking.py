@@ -7,6 +7,13 @@ import numpy as np
 from ultralytics import YOLO
 
 from .calibration import project_point
+from .equipment import (
+    ShuttleTrajectory,
+    YoloObjectDetector,
+    associate_rackets,
+    draw_observations,
+)
+from .scene import SceneGate, append_scene_frame
 from .types import PlayerTrack, TrackPoint
 
 
@@ -58,6 +65,10 @@ def analyze_video(
     classes: list[int] | None = None,
     court_polygon: list[list[int]] | None = None,
     max_track_history: int = 45,
+    scene_filter: dict | None = None,
+    racket_detector: dict | None = None,
+    shuttle_detector: dict | None = None,
+    analysis_log: dict | None = None,
     homography=None,
 ) -> tuple[dict[int, PlayerTrack], float]:
     source = cv2.VideoCapture(video_path)
@@ -100,6 +111,18 @@ def analyze_video(
                 f"court_polygon points must be inside the {width}x{height} video frame"
             )
 
+    scene_gate = SceneGate(polygon=polygon, fps=fps, **(scene_filter or {}))
+    racket_model = YoloObjectDetector("racket", racket_detector)
+    shuttle_model = YoloObjectDetector("shuttle", shuttle_detector)
+    shuttle_trajectory = ShuttleTrajectory(
+        alpha=float((shuttle_detector or {}).get("alpha", 0.75)),
+        beta=float((shuttle_detector or {}).get("beta", 0.20)),
+        max_gap=int((shuttle_detector or {}).get("max_gap", 4)),
+    )
+    event_data = analysis_log if analysis_log is not None else {}
+    scene_segments: list[dict] = []
+    racket_events: list[dict] = []
+    shuttle_events: list[dict] = []
     tracks: dict[int, PlayerTrack] = defaultdict(lambda: PlayerTrack(track_id=-1))
     frame_number = 0
     progress = ProgressBar(total_frames, "Analyzing video")
@@ -109,6 +132,31 @@ def analyze_video(
             success, frame = source.read()
             if not success:
                 break
+
+            timestamp = frame_number / fps
+            decision = scene_gate.update(frame, frame_number)
+            append_scene_frame(scene_segments, decision, frame_number)
+
+            if decision.cut:
+                model.predictor = None
+                shuttle_trajectory.reset()
+
+            if not decision.gameplay:
+                annotated = frame.copy()
+                cv2.putText(
+                    annotated,
+                    f"SKIPPED: {decision.reason}",
+                    (15, 28),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 255, 255),
+                    2,
+                    cv2.LINE_AA,
+                )
+                writer.write(annotated)
+                frame_number += 1
+                progress.update(1)
+                continue
 
             result = model.track(
                 frame,
@@ -136,18 +184,20 @@ def analyze_video(
                     thickness=2,
                 )
 
+            player_boxes: list[tuple[int, np.ndarray]] = []
             if result.boxes is not None and result.boxes.is_track:
                 boxes = result.boxes.xyxy.cpu().numpy()
                 track_ids = result.boxes.id.int().cpu().tolist()
-                timestamp = frame_number / fps
 
                 for box, track_id in zip(boxes, track_ids):
+                    global_track_id = track_id + decision.scene_id * 100000
+                    player_boxes.append((global_track_id, box))
                     x1, y1, x2, y2 = box
                     x = float((x1 + x2) / 2)
                     y = float(y2)
                     projected = project_point(x, y, homography)
-                    track = tracks[track_id]
-                    track.track_id = track_id
+                    track = tracks[global_track_id]
+                    track.track_id = global_track_id
                     track.add(
                         TrackPoint(
                             frame=frame_number,
@@ -160,6 +210,35 @@ def analyze_video(
                         max_track_history,
                     )
 
+            rackets = racket_model.detect(
+                frame, frame_number, timestamp, decision.scene_id, polygon
+            )
+            associate_rackets(rackets, player_boxes)
+            racket_events.extend(item.to_dict() for item in rackets)
+
+            shuttle_candidates = shuttle_model.detect(
+                frame, frame_number, timestamp, decision.scene_id, polygon
+            )
+            shuttle = shuttle_trajectory.update(
+                shuttle_candidates, frame_number, timestamp, decision.scene_id
+            )
+            equipment = list(rackets)
+            if shuttle is not None:
+                equipment.append(shuttle)
+                shuttle_events.append(shuttle.to_dict())
+            draw_observations(annotated, equipment)
+
+            cv2.putText(
+                annotated,
+                f"scene {decision.scene_id} | gameplay | court {decision.court_score:.0%}",
+                (15, 28),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (0, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
+
             writer.write(annotated)
             frame_number += 1
             progress.update(1)
@@ -169,4 +248,17 @@ def analyze_video(
         writer.release()
         cv2.destroyAllWindows()
 
+    event_data.update(
+        {
+            "scenes": scene_segments,
+            "rackets": racket_events,
+            "shuttle": shuttle_events,
+            "processed_frames": frame_number,
+            "gameplay_frames": sum(
+                item["end_frame"] - item["start_frame"] + 1
+                for item in scene_segments
+                if item["gameplay"]
+            ),
+        }
+    )
     return dict(tracks), fps

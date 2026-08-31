@@ -1,0 +1,8 @@
+# Copy this file and update path to your labeled YOLO-format dataset.
+path: datasets/shuttle
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: shuttle

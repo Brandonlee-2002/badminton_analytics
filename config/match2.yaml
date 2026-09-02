@@ -1,0 +1,52 @@
+# Calibration for data/raw/match2.mp4 (1280x720, gray court).
+model: yolo26s.pt
+tracker: bytetrack.yaml
+confidence: 0.25
+image_size: 960
+classes: [0]
+
+court_polygon:
+  - [255, 676] # near left
+  - [1010, 676] # near right
+  - [800, 302] # far right
+  - [480, 302] # far left
+
+scene_filter:
+  enabled: true
+  cut_threshold: 0.55
+  warmup_frames: 2
+  min_court_fraction: 0.70
+  # Gray court: low saturation with moderate brightness.
+  court_hsv_lower: [0, 0, 35]
+  court_hsv_upper: [180, 60, 230]
+  # Add [start_seconds, end_seconds] entries for known replay segments.
+  manual_skip_ranges: []
+
+# Use a custom racket model when available. For a rough COCO baseline, enable
+# this with model: yolo26s.pt and classes: [38] (tennis racket).
+racket_detector:
+  enabled: false
+  model: models/racket_best.pt
+  classes: [0]
+  confidence: 0.20
+  image_size: 1280
+  stride: 2
+
+# The shuttle is not a COCO class. This must point to custom shuttle weights.
+# A temporal TrackNet adapter can later replace this detector behind the same log.
+shuttle_detector:
+  enabled: false
+  model: models/shuttle_best.pt
+  classes: [0]
+  confidence: 0.10
+  image_size: 1280
+  stride: 1
+  alpha: 0.75
+  beta: 0.20
+  max_gap: 4
+
+max_track_history: 45
+court_homography: null
+output_video: data/processed/match2_annotated.mp4
+output_metrics: data/processed/match2_metrics.json
+output_events: data/processed/match2_events.json

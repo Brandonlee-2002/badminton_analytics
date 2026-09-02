@@ -38,6 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output dataset directory",
     )
     parser.add_argument(
+        "--split",
+        choices=("both", "train", "val"),
+        default="both",
+        help="Destination split: mixed train/val, training only, or validation only",
+    )
+    parser.add_argument(
         "--config",
         default="config/default.yaml",
         help="Project YAML containing court_polygon and scene_filter",
@@ -58,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--val-ratio",
         type=float,
         default=0.20,
-        help="Target fraction assigned to validation",
+        help="Validation fraction when --split both is used",
     )
     parser.add_argument(
         "--oversample",
@@ -93,8 +99,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--count must be positive")
     if not 0.0 <= args.court_ratio <= 1.0:
         raise ValueError("--court-ratio must be between 0 and 1")
-    if not 0.0 <= args.val_ratio < 1.0:
-        raise ValueError("--val-ratio must be between 0 and 1")
+    if not 0.0 <= args.val_ratio <= 1.0:
+        raise ValueError("--val-ratio must be between 0 and 1 inclusive")
     if args.oversample < 1.0:
         raise ValueError("--oversample must be at least 1")
     if args.duplicate_distance < 0:
@@ -468,12 +474,20 @@ def main() -> None:
     if not selected:
         raise RuntimeError("No readable frames were selected")
 
-    val_blocks = validation_blocks(
-        selected,
-        val_ratio=args.val_ratio,
-        block_seconds=args.split_block_seconds,
-        seed=args.seed,
-    )
+    if args.split == "train":
+        val_blocks = set()
+    elif args.split == "val":
+        val_blocks = {
+            int(candidate.timestamp_seconds // args.split_block_seconds)
+            for candidate in selected
+        }
+    else:
+        val_blocks = validation_blocks(
+            selected,
+            val_ratio=args.val_ratio,
+            block_seconds=args.split_block_seconds,
+            seed=args.seed,
+        )
     train_count, val_count = write_dataset(
         selected=selected,
         video_path=video_path,
@@ -488,6 +502,7 @@ def main() -> None:
 
     print()
     print("Extraction complete.")
+    print(f"Destination mode: {args.split}")
     print(f"Selected: {len(selected)} frames")
     print(f"Court views: {court_count}")
     print(f"Other broadcast views: {len(selected) - court_count}")
